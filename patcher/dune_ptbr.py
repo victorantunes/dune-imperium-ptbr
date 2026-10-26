@@ -232,6 +232,45 @@ def patch_texts(cache, slot_code, replace_english):
     write_atomic(cache, save_like_original(env, backup_path))
 
 
+
+def patch_texts_add_pt(cache):
+    """Acrescenta um TextAsset 'pt_BR' ao pacote de textos (sem alterar nenhum idioma)."""
+    import copy
+    backup_path = backup(cache)
+    env = UnityPy.load(backup_path)
+    assets = text_assets(env)
+    if "en_us" not in assets:
+        sys.exit("Idioma en_US não encontrado no pacote de textos.")
+    translated = merged_translation(read_script(assets["en_us"][1]))
+    if "pt_br" in assets:
+        obj, _ = assets["pt_br"]
+        tt = obj.read_typetree()
+        tt["m_Script"] = translated
+        obj.save_typetree(tt)
+    else:
+        src, _ = assets["en_us"]
+        sf = src.assets_file
+        new = copy.copy(src)
+        new.path_id = max(sf.objects) + 1 if sf.objects else 1
+        tt = src.read_typetree()
+        tt["m_Name"] = "pt_BR"
+        tt["m_Script"] = translated
+        new.save_typetree(tt)
+        sf.objects[new.path_id] = new
+        for o in env.objects:
+            if o.type.name == "AssetBundle":
+                bt = o.read_typetree()
+                size = len(bt["m_PreloadTable"])
+                bt["m_PreloadTable"].append({"m_FileID": 0, "m_PathID": new.path_id})
+                bt["m_Container"].append((
+                    "assets/editor/localization/pt_br.txt",
+                    {"preloadIndex": size, "preloadSize": 1, "asset": {"m_FileID": 0, "m_PathID": new.path_id}},
+                ))
+                o.save_typetree(bt)
+    write_atomic(cache, save_like_original(env, backup_path))
+    print("Texto pt_BR adicionado ao pacote de idiomas (os outros idiomas ficam intactos).")
+
+
 def patch_locale(slot_code):
     path = locales_bundle()
     if not path:
@@ -266,16 +305,26 @@ def patch_locale(slot_code):
 
 def apply(args):
     cache = find_cache()
-    if not args.usar_vaga:
-        # Padrão: não mexe na pasta da Steam nem em nenhum outro idioma.
-        restore_locale()  # desfaz qualquer alteração antiga do bundle de idiomas
-        patch_texts(cache, args.slot, replace_english=True)
-        print("Pronto! No jogo, o idioma 'English' agora é português (o rótulo no menu continua 'English').")
-    else:
+    if args.usar_vaga:
         # Experimental: usa a vaga de outro idioma (o rótulo no menu NÃO muda; veja o README).
         patch_texts(cache, args.slot, replace_english=False)
         patch_locale(args.slot)
         print(f"Pronto! Escolha o idioma da vaga {args.slot} em Configurações > Idiomas.")
+    elif args.substituir_ingles:
+        # Modo simples, sem mod loader: o idioma "English" passa a ser português.
+        restore_locale()
+        restore_loader()
+        patch_texts(cache, args.slot, replace_english=True)
+        print("Pronto! No jogo, o idioma 'English' agora é português (o rótulo no menu continua 'English').")
+    else:
+        # Padrão: mod loader + novo idioma "Português (Brasil)" na lista.
+        restore_locale()
+        patch_texts_add_pt(cache)
+        install_loader()
+        game = find_game_dir()
+        with open(os.path.join(game, "dune_loader.ini"), "w") as f:
+            f.write("hook=1" + chr(10))
+        print("Pronto! Abra o jogo: 'Português (Brasil)' aparece em Configurações > Idiomas (logo após English).")
 
 
 def restore_locale():
@@ -286,9 +335,67 @@ def restore_locale():
     return False
 
 
+# ------------------------------------------------------------------ mod loader
+def steam_api_paths():
+    d = find_game_dir()
+    if not d:
+        return None, None
+    base = os.path.join(d, "DuneImperium_Data", "Plugins", "x86_64")
+    # A original fica na raiz do jogo: o Windows resolve os forwarders do proxy
+    # procurando na pasta do executável (e não na pasta da DLL que repassa).
+    return os.path.join(base, "steam_api64.dll"), os.path.join(d, "steam_api64_real.dll")
+
+
+def is_proxy(path):
+    with open(path, "rb") as f:
+        return b"steam_api64_real." in f.read()
+
+
+def install_loader():
+    """Instala o proxy da steam_api64.dll (veja loader/make_proxy.py)."""
+    sys.path.insert(0, os.path.join(HERE, "..", "loader"))
+    sys.path.insert(0, os.path.join(HERE, "loader"))
+    import make_proxy
+
+    api, real = steam_api_paths()
+    if not api or not os.path.isfile(api):
+        sys.exit("Não encontrei a steam_api64.dll do jogo.")
+    if not is_proxy(api):
+        # a original (nova ou atualizada pela Steam) vira a "real"
+        os.replace(api, real)
+        print("Original guardada como steam_api64_real.dll")
+    elif not os.path.isfile(real):
+        sys.exit("Proxy instalado, mas steam_api64_real.dll sumiu; rode 'Verificar integridade' na Steam.")
+    try:
+        import build_loader  # compila loader/src/loader.c (precisa do Zig)
+        tmp_dll = api + ".new"
+        n = build_loader.build(real, tmp_dll)
+        os.replace(tmp_dll, api)
+        print(f"Mod loader compilado e instalado ({n} exports repassados à steam_api64_real.dll).")
+    except (ImportError, SystemExit) as e:
+        print("Aviso: não foi possível compilar o loader completo; usando o proxy simples.", e)
+        data, n = make_proxy.build(real)
+        write_atomic(api, data)
+        print(f"Proxy simples instalado ({n} exports repassados à steam_api64_real.dll).")
+
+
+def restore_loader():
+    api, real = steam_api_paths()
+    if api and real and os.path.isfile(real):
+        os.replace(real, api)
+        return True
+    return False
+
+
 def restore(args):
     cache = find_cache()
-    did = False
+    did = restore_loader()
+    gd = find_game_dir()
+    if gd:
+        for fn in ("dune_loader.ini", "dune_loader.log", "dune_hook.txt", "dune_probe.txt", "dune_diag.txt"):
+            fp = os.path.join(gd, fn)
+            if os.path.exists(fp):
+                os.remove(fp)
     if os.path.exists(cache + ".original"):
         shutil.copy2(cache + ".original", cache)
         did = True
@@ -329,8 +436,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--restore", action="store_true")
     ap.add_argument("--status", action="store_true")
-    ap.add_argument("--substituir-ingles", action="store_true", help=argparse.SUPPRESS)  # compatibilidade (agora é o padrão)
+    ap.add_argument("--substituir-ingles", action="store_true", help="modo simples, sem mod loader: troca o texto do idioma English")
     ap.add_argument("--usar-vaga", action="store_true", help="experimental: usa a vaga de outro idioma (altera a pasta da Steam)")
+    ap.add_argument("--loader", action="store_true", help="experimental: instala só o proxy da steam_api64.dll (mod loader)")
     ap.add_argument("--slot", default=DEFAULT_SLOT, help="código do idioma usado como vaga (padrão: cs-CZ)")
     ap.add_argument("--cache", help="caminho do __data (avançado/testes)")
     ap.add_argument("--game-dir", help="pasta do jogo (avançado/testes)")
@@ -344,7 +452,8 @@ def main():
             a.restore = True
         elif choice != "1":
             return
-    action = restore if a.restore else status if a.status else apply
+    action = (restore if a.restore else status if a.status
+              else (lambda _a: install_loader()) if a.loader else apply)
     try:
         action(a)
     except SystemExit as e:  # mensagens amigáveis do sys.exit("...")

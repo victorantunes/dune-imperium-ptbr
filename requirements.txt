@@ -1,1 +1,3 @@
-UnityPy==1.25.0
+UnityPy==1.25.4
+pefile==2024.8.26
+ziglang==0.16.0
