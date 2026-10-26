@@ -32,6 +32,11 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import crcfix  # noqa: E402
+
+CRC_MARKER = b"FRGE"
+
 try:
     import UnityPy
 except ImportError:
@@ -216,23 +221,14 @@ def patch_texts(cache, slot_code, replace_english):
         d.m_Script = translated
         d.save()
     else:
+        # Mantém o nome/código do idioma da "vaga": o jogo só lista códigos que
+        # ele conhece, então o texto é trocado sem renomear nada.
         old = slot_code.replace("-", "_").lower()
-        new = NEW_CODE.replace("-", "_").lower()
         if old not in assets:
             sys.exit(f"Idioma {slot_code} não encontrado no pacote de textos.")
         obj, d = assets[old]
-        lang, region = new.split("_")
-        d.m_Name = lang + "_" + region.upper()
         d.m_Script = translated
         d.save()
-        for o in env.objects:  # o container mapeia caminho -> asset
-            if o.type.name == "AssetBundle":
-                tt = o.read_typetree()
-                tt["m_Container"] = [
-                    (p.replace(f"/{old}.txt", f"/{new}.txt") if p.endswith(f"/{old}.txt") else p, v)
-                    for p, v in tt["m_Container"]
-                ]
-                o.save_typetree(tt)
     write_atomic(cache, save_like_original(env, backup_path))
 
 
@@ -251,27 +247,35 @@ def patch_locale(slot_code):
             continue
         tt = o.read_typetree()
         if tt.get("m_Identifier", {}).get("m_Code") == slot_code:
-            tt["m_Identifier"]["m_Code"] = NEW_CODE
             tt["m_LocaleName"] = NEW_NAME
             tt["m_Name"] = NEW_NAME
+            tt["m_CustomFormatCultureCode"] = CRC_MARKER.decode("ascii")  # campo sem efeito (usado no ajuste de CRC)
             o.save_typetree(tt)
             found = True
     if not found:
         sys.exit(f"Idioma {slot_code} não encontrado no pacote de idiomas do jogo.")
-    write_atomic(path, save_like_original(env, backup_path))
+    # O catálogo do Addressables guarda o CRC32 do bundle original e o jogo recusa
+    # qualquer arquivo diferente (loop de erro). Ajustamos 4 bytes inertes para
+    # que o CRC do bundle alterado seja idêntico ao do original.
+    with open(backup_path, "rb") as f:
+        target = crcfix.crc_of_bundle(f.read())
+    data = crcfix.fix_crc(save_like_original(env, backup_path), target, CRC_MARKER)
+    write_atomic(path, data)
     print(f"Menu de idiomas: {slot_code} agora aparece como \"{NEW_NAME}\".")
 
 
 def apply(args):
     cache = find_cache()
-    if args.substituir_ingles:
-        restore_locale()  # garante que o menu volte ao normal
+    if not args.usar_vaga:
+        # Padrão: não mexe na pasta da Steam nem em nenhum outro idioma.
+        restore_locale()  # desfaz qualquer alteração antiga do bundle de idiomas
         patch_texts(cache, args.slot, replace_english=True)
-        print("Pronto! No jogo, o idioma 'English' agora é português.")
+        print("Pronto! No jogo, o idioma 'English' agora é português (o rótulo no menu continua 'English').")
     else:
+        # Experimental: usa a vaga de outro idioma (o rótulo no menu NÃO muda; veja o README).
         patch_texts(cache, args.slot, replace_english=False)
         patch_locale(args.slot)
-        print("Pronto! Abra o jogo e escolha 'Português (Brasil)' em Configurações > Idiomas.")
+        print(f"Pronto! Escolha o idioma da vaga {args.slot} em Configurações > Idiomas.")
 
 
 def restore_locale():
@@ -299,7 +303,7 @@ def status(args):
     env = UnityPy.load(cache)
     assets = text_assets(env)
     print("  idiomas no pacote:", ", ".join(sorted(assets)))
-    for name in ("pt_br", "en_us"):
+    for name in ("cs_cz", "en_us"):
         if name in assets:
             _, kv = parse(read_script(assets[name][1]))
             print(f"  {name}: button.play = {kv.get('button.play')}")
@@ -313,10 +317,9 @@ def status(args):
 def menu():
     print("Dune: Imperium - traducao pt-BR")
     print()
-    print("  1) Instalar (Portugues aparece em Configuracoes > Idiomas)")
-    print("  2) Instalar substituindo o ingles (nao mexe na pasta da Steam)")
-    print("  3) Restaurar o original")
-    print("  4) Sair")
+    print("  1) Instalar (o idioma English do jogo passa a ser portugues)")
+    print("  2) Restaurar o original")
+    print("  3) Sair")
     print()
     return input("Escolha: ").strip()
 
@@ -326,7 +329,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--restore", action="store_true")
     ap.add_argument("--status", action="store_true")
-    ap.add_argument("--substituir-ingles", action="store_true")
+    ap.add_argument("--substituir-ingles", action="store_true", help=argparse.SUPPRESS)  # compatibilidade (agora é o padrão)
+    ap.add_argument("--usar-vaga", action="store_true", help="experimental: usa a vaga de outro idioma (altera a pasta da Steam)")
     ap.add_argument("--slot", default=DEFAULT_SLOT, help="código do idioma usado como vaga (padrão: cs-CZ)")
     ap.add_argument("--cache", help="caminho do __data (avançado/testes)")
     ap.add_argument("--game-dir", help="pasta do jogo (avançado/testes)")
@@ -337,8 +341,6 @@ def main():
     if interactive:
         choice = menu()
         if choice == "2":
-            a.substituir_ingles = True
-        elif choice == "3":
             a.restore = True
         elif choice != "1":
             return
