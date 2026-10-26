@@ -1,47 +1,52 @@
 # Dune: Imperium — Tradução pt-BR (Steam)
 
-Tradução não oficial para português do Brasil do **Dune: Imperium** (Dire Wolf Digital) na Steam. Adiciona **Português (Brasil)** à lista de idiomas em *Configurações → Idiomas*.
+Tradução não oficial para português do Brasil do **Dune: Imperium** (Dire Wolf Digital) na Steam.
 
-> Projeto de fãs, sem ligação com a Dire Wolf Digital, Asmodee, Legendary ou os detentores de *Duna*. Nenhum arquivo do jogo é distribuído aqui — só o texto traduzido e um instalador que o aplica na sua cópia.
+> Projeto de fãs, sem ligação com a Dire Wolf Digital, Asmodee, Legendary ou os detentores de *Duna*. Nenhum arquivo do jogo é distribuído aqui, só o texto traduzido e um instalador que o aplica na sua cópia.
+
+## Como funciona (e uma limitação importante)
+
+O menu de idiomas do jogo **é montado a partir da lista de idiomas da Steam** (inglês, francês, italiano, alemão, espanhol, tcheco, japonês, polonês, coreano, ucraniano e chinês). Português do Brasil não está nessa lista, e não dá para acrescentar um item ao menu só trocando arquivos de dados.
+
+Por isso o instalador troca o **texto do idioma "English"** pelo português. No jogo você continua em *Configurações → Idiomas → English* (é o padrão), e tudo aparece em português. Nenhum outro idioma e nenhum arquivo da pasta da Steam é alterado.
 
 ## Instalar (Windows)
 
-**Com Python 3.9+:** baixe o repositório (*Code → Download ZIP*), extraia e dê duplo clique em `install.bat`.
-
-Antes: abra o jogo **uma vez com internet** até o menu principal e feche. É nesse momento que ele baixa os textos que o instalador modifica.
-
-Depois, no jogo: **Configurações → Idiomas → Português (Brasil)**.
+1. Abra o jogo **uma vez com internet** até o menu principal e feche. É nesse momento que ele baixa os textos que o instalador modifica.
+2. Instale o [Python 3.9+](https://www.python.org/downloads/) (marque *Add Python to PATH*).
+3. Baixe este repositório (*Code → Download ZIP*), extraia e dê duplo clique em `install.bat`.
+4. Abra o jogo.
 
 ## Desinstalar
 
-`restaurar.bat` (ou *3) Restaurar* no `.exe`). Também funciona *Verificar integridade dos arquivos* na Steam, mas só restaura o menu; rode o restaurador para limpar tudo.
+`restaurar.bat`. O original é restaurado a partir do backup (`__data.original`).
 
-## O que o instalador mexe
+## O que o instalador altera
 
 | Arquivo | O que muda | Backup |
 |---|---|---|
-| `%USERPROFILE%\AppData\LocalLow\Unity\Dire Wolf Digital_Dune_ Imperium\localization\…\__data` | recebe os textos `pt_BR` | `__data.original` |
-| `…\Dune Imperium\DuneImperium_Data\StreamingAssets\aa\StandaloneWindows64\localization-locales_assets_all.bundle` | um dos 12 idiomas (por padrão **tcheco**) passa a se chamar "Português (Brasil)" | `….bundle.original` |
-
-O jogo só tem 12 vagas de idioma e não dá para criar uma 13ª sem mexer no código, então o português ocupa a vaga do tcheco. Prefere outra? `python patcher/dune_ptbr.py --slot ko-KR`.
-
-**Não quer mexer na pasta da Steam?** Use `--substituir-ingles` (ou a opção 2 do `.exe`): o idioma "English" do jogo passa a ser português e só o cache em `AppData` é alterado.
+| `%USERPROFILE%\AppData\LocalLow\Unity\Dire Wolf Digital_Dune_ Imperium\localization\…\__data` | o texto `en_US` recebe a tradução | `__data.original` |
 
 ## Quando o jogo atualizar
 
-Atualizações podem restaurar o bundle de idiomas ou trocar o cache de textos. É só **rodar o instalador de novo**. Textos novos que ainda não foram traduzidos aparecem em inglês; para listá-los:
+Atualizações podem trocar o cache de textos. É só **rodar o instalador de novo**. Textos novos que ainda não foram traduzidos aparecem em inglês; para listá-los:
 
 ```
 python tools/missing_keys.py
 ```
 
+## Modo experimental: usar a vaga de outro idioma
+
+`python patcher/dune_ptbr.py --usar-vaga` troca o texto de outro idioma da lista (por padrão o tcheco) em vez do inglês. **O rótulo no menu continua o do idioma original** (por exemplo "Čeština"), porque ele vem da Steam. Esse modo também altera o bundle de idiomas da pasta da Steam (ajustando o CRC para o jogo aceitá-lo) e por isso não é o padrão. `restaurar.bat` desfaz.
+
 ## Limitações conhecidas
 
+- O menu mostra "English" mesmo com o jogo em português (veja acima).
 - Textos que ficam desenhados nas imagens das cartas e alguns textos embutidos nos prefabs do jogo continuam em inglês.
 - O contrato de licença (EULA) foi mantido em inglês de propósito.
 - A tradução foi feita com apoio de IA e **sem revisão por falante nativo**. Os termos de regras seguem o manual de *Uprising* da Galápagos ([glossário](translation/GLOSSARIO.md)), mas nomes de cartas e termos de *Ascensão de Ix* e *Imortalidade* não têm referência oficial aqui e podem diferir da edição física. Correções são bem-vindas.
 - É uma modificação do lado do cliente, só de texto. Use por sua conta e risco, principalmente no jogo online.
-- Só testado no Windows com a versão de outubro/2026 do jogo.
+- Só testado no Windows com a versão 4.1.2.1808 do jogo.
 
 ## Contribuir
 
