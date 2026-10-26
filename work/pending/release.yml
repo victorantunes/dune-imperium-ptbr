@@ -1,0 +1,28 @@
+name: Release
+
+# Ao publicar uma tag (ex.: v1.0.0), gera o .exe e anexa à Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+      - name: Gerar executável
+        run: >
+          pyinstaller --onefile --console --name DuneImperium-PTBR
+          --add-data "translation/pt_BR.txt;."
+          --collect-all UnityPy
+          patcher/dune_ptbr.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/DuneImperium-PTBR.exe
