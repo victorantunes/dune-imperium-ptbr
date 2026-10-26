@@ -51,6 +51,9 @@ Edite `translation/pt_BR.txt` (formato `chave=valor`, uma por linha) e abra um P
 - Siga o [glossário](translation/GLOSSARIO.md).
 - Tratamento por "você".
 
-## Licença
+## Licença e direitos
 
-O código (`patcher/`, `tools/`, scripts) é MIT. O texto original do jogo pertence aos seus detentores; `translation/pt_BR.txt` é uma obra derivada fornecida para uso pessoal.
+- **Código** (`patcher/`, `tools/`, scripts `.bat`): licença MIT (arquivo `LICENSE`).
+- **Texto traduzido** (`translation/pt_BR.txt`): obra derivada do texto de *Dune: Imperium*. **Não é licenciada para reutilização**; é fornecida apenas para uso pessoal, com os direitos do texto original preservados para seus detentores (Dire Wolf Digital, Legendary, Herbert Properties e demais).
+- Se você é detentor desses direitos e quer a remoção do conteúdo, abra uma issue ou contate o mantenedor, e o texto será retirado.
+- O repositório não contém arquivos, imagens, áudios ou código do jogo.
