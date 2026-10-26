@@ -6,9 +6,7 @@ Tradução não oficial para português do Brasil do **Dune: Imperium** (Dire Wo
 
 ## Instalar (Windows)
 
-**Opção A — sem instalar nada:** baixe `DuneImperium-PTBR.exe` na página de [Releases](../../releases), dê duplo clique e escolha *1) Instalar*.
-
-**Opção B — com Python 3.9+:** baixe o repositório (*Code → Download ZIP*), extraia e dê duplo clique em `install.bat`.
+**Com Python 3.9+:** baixe o repositório (*Code → Download ZIP*), extraia e dê duplo clique em `install.bat`.
 
 Antes: abra o jogo **uma vez com internet** até o menu principal e feche. É nesse momento que ele baixa os textos que o instalador modifica.
 
