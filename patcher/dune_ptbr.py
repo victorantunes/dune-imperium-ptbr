@@ -23,6 +23,7 @@ import glob
 import os
 import re
 import shutil
+import struct
 import sys
 
 for _s in (sys.stdout, sys.stderr):
@@ -149,6 +150,31 @@ def backup(path):
     return b
 
 
+def bundle_header(data):
+    """Cabeçalho UnityFS: (versão do formato, versão da Unity, flags)."""
+    sig_end = data.index(bytes([0]))
+    i = sig_end + 1 + 4
+    pv_end = data.index(bytes([0]), i)
+    uv_end = data.index(bytes([0]), pv_end + 1)
+    flags = struct.unpack(">I", data[uv_end + 1 + 16: uv_end + 1 + 20])[0]
+    return data[:sig_end], data[pv_end + 1:uv_end], flags
+
+
+def save_like_original(env, original_path):
+    """Regrava o bundle mantendo compressão/flags do original e confere o cabeçalho.
+
+    O Unity 6 recusa bundles com flags diferentes (ex.: packer 'lz4' perde o
+    preenchimento de bloco e o jogo fica em loop de erro). Por isso a gravação
+    usa o packer 'original' e abortamos se o cabeçalho não for idêntico.
+    """
+    data = env.file.save(packer="original")
+    with open(original_path, "rb") as f:
+        ref = f.read(256)
+    if bundle_header(data) != bundle_header(ref):
+        sys.exit("O bundle gerado tem cabeçalho diferente do original; abortado para não quebrar o jogo.")
+    return data
+
+
 def write_atomic(path, data):
     tmp = path + ".tmp"
     with open(tmp, "wb") as f:
@@ -207,7 +233,7 @@ def patch_texts(cache, slot_code, replace_english):
                     for p, v in tt["m_Container"]
                 ]
                 o.save_typetree(tt)
-    write_atomic(cache, env.file.save(packer="lz4"))
+    write_atomic(cache, save_like_original(env, backup_path))
 
 
 def patch_locale(slot_code):
@@ -217,7 +243,8 @@ def patch_locale(slot_code):
             "Não encontrei a pasta do jogo na Steam.\n"
             "Use --substituir-ingles, que não precisa dela, ou informe --game-dir."
         )
-    env = UnityPy.load(backup(path))
+    backup_path = backup(path)
+    env = UnityPy.load(backup_path)
     found = False
     for o in env.objects:
         if o.type.name != "MonoBehaviour":
@@ -231,7 +258,7 @@ def patch_locale(slot_code):
             found = True
     if not found:
         sys.exit(f"Idioma {slot_code} não encontrado no pacote de idiomas do jogo.")
-    write_atomic(path, env.file.save(packer="lz4"))
+    write_atomic(path, save_like_original(env, backup_path))
     print(f"Menu de idiomas: {slot_code} agora aparece como \"{NEW_NAME}\".")
 
 
